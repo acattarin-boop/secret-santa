@@ -9,7 +9,7 @@
   var EVENT = {
     year: 2026,
     date: 'December 28',
-    time: '',                 // Add the time here, for example '4:00 PM'
+    time: '10:36 AM',                 // Add the time here, for example '4:00 PM'
     place: 'Cattarin House',
     adultLimit: 'No limit',
     childLimit: 'No limit',
