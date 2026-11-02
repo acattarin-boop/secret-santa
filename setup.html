@@ -1,0 +1,257 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<meta name="referrer" content="no-referrer">
+<title>Secret Santa Setup</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Shantell+Sans:wght@400;600;700&family=Young+Serif&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<main class="setup">
+  <h1>Secret Santa setup</h1>
+  <p class="lead">Finish the test run first. The real draw is created only when you ask for it.</p>
+
+  <div class="mode">
+    <button id="mode-test" type="button" aria-pressed="true">Test run</button>
+    <button id="mode-real" type="button" aria-pressed="false">Real draw</button>
+  </div>
+
+  <section id="test" class="sheet">
+    <h2>Test run</h2>
+    <p>This uses made-up names, so you can see every result. Nothing here affects the real draw.</p>
+    <div class="actions"><button id="run-test" class="button" type="button">Create a test draw</button></div>
+    <div id="test-output" hidden>
+      <p id="test-status" class="status" style="margin-top:16px"></p>
+      <table class="results">
+        <thead><tr><th scope="col">Giver</th><th scope="col">Adult</th><th scope="col">Child</th></tr></thead>
+        <tbody id="test-rows"></tbody>
+      </table>
+      <ul id="test-people" class="people"></ul>
+    </div>
+  </section>
+
+  <section id="real" class="sheet" hidden>
+    <div id="real-start">
+      <h2>Create the real draw</h2>
+      <p>The site will draw names for all 8 adults and show you only a link for each person. It will not show you who drew whom.</p>
+      <label class="confirm"><input id="tested" type="checkbox"><span>I finished the test run and I am ready to create the real draw.</span></label>
+      <div class="actions"><button id="run-real" class="button" type="button" disabled>Create the real draw</button></div>
+      <div class="danger">
+        <p>Already created the draw on another device? Restore it from your backup file.</p>
+        <label class="button quiet file-label">Restore from backup<input id="restore" type="file" accept=".json,application/json" hidden></label>
+        <p id="restore-error" class="status bad" style="margin-top:14px" hidden></p>
+      </div>
+    </div>
+
+    <div id="real-done" hidden>
+      <h2>Your real draw is ready</h2>
+      <p id="real-status" class="status"></p>
+      <p id="storage-warning" class="status bad" hidden>This browser could not save the draw. Download the backup file before closing this page.</p>
+      <p>Copy each message and text it to that person. Only open the link marked as yours.</p>
+      <ul id="real-people" class="people"></ul>
+      <div class="actions"><button id="backup" class="button quiet" type="button">Download backup file</button></div>
+      <p style="margin-top:14px">Keep the backup somewhere safe. It holds everyone's links, so don't open them.</p>
+      <div class="danger">
+        <p><strong>Start over only if no links have been sent, or you will resend all 8.</strong> Links from two different draws can give someone the wrong people or leave someone out.</p>
+        <label for="reset-word">Type NEW DRAW to delete this draw</label>
+        <input id="reset-word" type="text" autocomplete="off">
+        <button id="reset" class="button quiet" type="button" disabled>Delete this draw</button>
+      </div>
+    </div>
+  </section>
+</main>
+
+<script src="santa.js"></script>
+<script>
+(function () {
+  var E = Santa.EVENT;
+  var KEY = 'secret-santa-draw-' + E.year;
+  var saved = null;
+  function byId(id) { return document.getElementById(id); }
+
+  function pageUrl() {
+    var name = location.protocol === 'file:' ? 'index.html' : './';
+    return new URL(name, location.href).href.split('#')[0].split('?')[0];
+  }
+  function linkFor(token) { return pageUrl() + '#' + token; }
+  function messageFor(person) {
+    return person.giver + ', here is your private Secret Santa link for Christmas ' + E.year +
+      '. Please don\'t share it: ' + linkFor(person.token);
+  }
+
+  function copyText(text) {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      return navigator.clipboard.writeText(text).catch(function () { return copyFallback(text); });
+    }
+    return copyFallback(text);
+  }
+  function copyFallback(text) {
+    var box = document.createElement('textarea');
+    box.value = text;
+    box.style.position = 'fixed';
+    box.style.opacity = '0';
+    document.body.appendChild(box);
+    box.select();
+    var ok = false;
+    try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
+    box.remove();
+    return ok ? Promise.resolve() : Promise.reject(new Error('copy failed'));
+  }
+
+  function renderPeople(list, people, withOpen) {
+    list.textContent = '';
+    people.forEach(function (person) {
+      var row = document.createElement('li');
+      var name = document.createElement('span');
+      name.textContent = person.giver;
+      var actions = document.createElement('span');
+      actions.className = 'person-actions';
+      if (withOpen) {
+        var open = document.createElement('a');
+        open.className = 'button quiet';
+        open.href = linkFor(person.token);
+        open.target = '_blank';
+        open.rel = 'noopener';
+        open.textContent = 'Open tag';
+        actions.appendChild(open);
+      }
+      var copy = document.createElement('button');
+      copy.type = 'button';
+      copy.className = 'button quiet';
+      copy.textContent = 'Copy message';
+      copy.addEventListener('click', function () {
+        copyText(messageFor(person)).then(function () {
+          copy.textContent = 'Copied';
+          name.className = 'done';
+        }, function () {
+          copy.textContent = 'Copy failed. Try again';
+        });
+      });
+      actions.appendChild(copy);
+      row.appendChild(name);
+      row.appendChild(actions);
+      list.appendChild(row);
+    });
+  }
+
+  function setMode(real) {
+    byId('mode-test').setAttribute('aria-pressed', String(!real));
+    byId('mode-real').setAttribute('aria-pressed', String(real));
+    byId('test').hidden = real;
+    byId('real').hidden = !real;
+  }
+  byId('mode-test').addEventListener('click', function () { setMode(false); });
+  byId('mode-real').addEventListener('click', function () { setMode(true); });
+
+  // Test run: made-up names only, so showing the results is safe.
+  byId('run-test').addEventListener('click', function () {
+    var draw = Santa.createDraw(Santa.TEST_FAMILY);
+    var problems = Santa.checkDraw(Santa.TEST_FAMILY, draw);
+    var status = byId('test-status');
+    status.textContent = problems.length ? problems.join(' ') : 'All rules passed for this test draw.';
+    status.className = problems.length ? 'status bad' : 'status';
+    var rows = byId('test-rows');
+    rows.textContent = '';
+    draw.forEach(function (d) {
+      var row = document.createElement('tr');
+      [d.giver, d.adult, d.child].forEach(function (value) {
+        var cell = document.createElement('td');
+        cell.textContent = value;
+        row.appendChild(cell);
+      });
+      rows.appendChild(row);
+    });
+    renderPeople(byId('test-people'), Santa.sealDraw(draw, E.year, Santa.newDrawCode(), true), true);
+    byId('test-output').hidden = false;
+  });
+
+  // Real draw: results are sealed straight away and never written to the page.
+  function persist() {
+    try {
+      localStorage.setItem(KEY, JSON.stringify(saved));
+      return localStorage.getItem(KEY) !== null;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  function showReal(stored) {
+    byId('real-start').hidden = true;
+    byId('real-done').hidden = false;
+    byId('real-status').textContent = 'Draw ' + saved.code + ': all rules passed for ' + saved.people.length + ' adults.';
+    byId('storage-warning').hidden = stored;
+    renderPeople(byId('real-people'), saved.people, false);
+  }
+
+  byId('tested').addEventListener('change', function () {
+    byId('run-real').disabled = !this.checked;
+  });
+
+  byId('run-real').addEventListener('click', function () {
+    var code = Santa.newDrawCode();
+    var people = Santa.sealDraw(Santa.createDraw(Santa.FAMILY), E.year, code, false);
+    saved = { year: E.year, code: code, created: new Date().toISOString(), people: people };
+    showReal(persist());
+  });
+
+  byId('backup').addEventListener('click', function () {
+    var file = new Blob([JSON.stringify(saved, null, 2)], { type: 'application/json' });
+    var link = document.createElement('a');
+    link.href = URL.createObjectURL(file);
+    link.download = 'secret-santa-' + saved.year + '-draw-' + saved.code + '.json';
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    setTimeout(function () { URL.revokeObjectURL(link.href); }, 1000);
+  });
+
+  byId('restore').addEventListener('change', function () {
+    var file = this.files[0];
+    var error = byId('restore-error');
+    if (!file) return;
+    file.text().then(function (text) {
+      var data = JSON.parse(text);
+      var valid = data && data.code && Array.isArray(data.people) && data.people.length === Santa.adultsOf(Santa.FAMILY).length &&
+        data.people.every(function (p) { var e = Santa.unseal(p.token); return e && e.giver === p.giver && !e.test; });
+      if (!valid) throw new Error('invalid');
+      saved = data;
+      error.hidden = true;
+      showReal(persist());
+    }).catch(function () {
+      error.textContent = 'This is not a valid backup file. Choose the file you downloaded from this page.';
+      error.hidden = false;
+    });
+  });
+
+  byId('reset-word').addEventListener('input', function () {
+    byId('reset').disabled = this.value.trim() !== 'NEW DRAW';
+  });
+
+  byId('reset').addEventListener('click', function () {
+    try { localStorage.removeItem(KEY); } catch (e) { /* nothing was stored */ }
+    saved = null;
+    byId('reset-word').value = '';
+    byId('reset').disabled = true;
+    byId('tested').checked = false;
+    byId('run-real').disabled = true;
+    byId('real-done').hidden = true;
+    byId('real-start').hidden = false;
+  });
+
+  try {
+    var stored = JSON.parse(localStorage.getItem(KEY));
+    if (stored && stored.people) {
+      saved = stored;
+      showReal(true);
+      setMode(true);
+    }
+  } catch (e) { /* no saved draw */ }
+})();
+</script>
+</body>
+</html>

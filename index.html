@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<meta name="referrer" content="no-referrer">
+<title>Family Secret Santa</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Shantell+Sans:wght@400;600;700&family=Young+Serif&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<main id="message" class="message" hidden>
+  <h1 id="message-title"></h1>
+  <p id="message-text"></p>
+</main>
+
+<main id="reveal" class="stage" hidden>
+  <div id="test-flag" class="test-flag" hidden>Test draw with made-up names</div>
+  <div class="twine" aria-hidden="true"></div>
+  <div class="tag-wrap">
+    <div id="tag" class="tag">
+      <section id="front" class="face front">
+        <h1>Secret Santa <span id="front-year"></span></h1>
+        <p class="to-name" id="to-name"></p>
+        <p>This tag has your two names on it. If you are not <span id="to-name-inline"></span>, please close this page.</p>
+        <button id="open" class="button" type="button"></button>
+      </section>
+      <section id="back" class="face back" aria-hidden="true">
+        <h1>Your gifts are for</h1>
+        <dl class="pair">
+          <dt>Adult</dt>
+          <dd><span id="adult" class="written"></span><span id="adult-limit" class="limit"></span></dd>
+          <dt>Child</dt>
+          <dd><span id="child" class="written"></span><span id="child-limit" class="limit"></span></dd>
+        </dl>
+        <p class="secret-note">Keep it secret. Your link still works if you need to check again.</p>
+      </section>
+    </div>
+  </div>
+  <section class="details" aria-labelledby="exchange">
+    <h2 id="exchange">Gift exchange</h2>
+    <p id="when"></p>
+    <p id="where"></p>
+    <p id="draw-code" class="code"></p>
+  </section>
+</main>
+
+<script src="santa.js"></script>
+<script>
+(function () {
+  var E = Santa.EVENT;
+  function byId(id) { return document.getElementById(id); }
+
+  function showMessage(title, text) {
+    byId('message-title').textContent = title;
+    byId('message-text').textContent = text;
+    byId('message').hidden = false;
+  }
+
+  var token = location.hash.slice(1);
+  if (!token) {
+    showMessage('Secret Santa ' + E.year, 'Open the personal link ' + E.organizer + ' sent you to see your names.');
+    return;
+  }
+
+  var entry = Santa.unseal(token);
+  if (!entry) {
+    showMessage('This link is incomplete', 'Ask ' + E.organizer + ' to send it again, then open the whole link.');
+    return;
+  }
+
+  document.title = 'Secret Santa ' + entry.year;
+  byId('front-year').textContent = entry.year;
+  byId('to-name').textContent = entry.giver;
+  byId('to-name-inline').textContent = entry.giver;
+  byId('open').textContent = 'I am ' + entry.giver + '. Show my names';
+  byId('when').textContent = E.date + (E.time ? ' at ' + E.time : '');
+  byId('where').textContent = E.place;
+  byId('draw-code').textContent = 'Draw ' + entry.code;
+  byId('test-flag').hidden = !entry.test;
+  byId('reveal').hidden = false;
+
+  byId('open').addEventListener('click', function () {
+    // Names reach the page only after this tap.
+    byId('adult').textContent = entry.adult;
+    byId('child').textContent = entry.child;
+    byId('adult-limit').textContent = 'Gift limit: ' + E.adultLimit;
+    byId('child-limit').textContent = 'Gift limit: ' + E.childLimit;
+    byId('tag').classList.add('open');
+    byId('front').setAttribute('aria-hidden', 'true');
+    byId('back').setAttribute('aria-hidden', 'false');
+    byId('open').disabled = true;
+    byId('open').tabIndex = -1;
+  });
+})();
+</script>
+</body>
+</html>
